@@ -171,3 +171,10 @@ poetry.toml
 .ruff_cache/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Large local data — do not deploy to Render
+dataset/
+.DS_Store
+output/smoke_test/
+output/general_model_run.log
+output/**/*.log

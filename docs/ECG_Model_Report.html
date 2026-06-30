@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>דוח מודל סיווג ECG בינארי</title>
+  <style>
+    :root {
+      --primary: #1a5276;
+      --primary-light: #2980b9;
+      --accent: #27ae60;
+      --warn: #e67e22;
+      --danger: #c0392b;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #2c3e50;
+      --muted: #7f8c8d;
+      --border: #dce4ec;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      color: white;
+      padding: 2.5rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 20px rgba(26, 82, 118, 0.3);
+    }
+
+    header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    header .subtitle { opacity: 0.9; font-size: 1rem; }
+    header .meta { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; }
+    header .meta span { background: rgba(255,255,255,0.15); padding: 0.3rem 0.8rem; border-radius: 20px; }
+
+    section {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border: 1px solid var(--border);
+    }
+
+    h2 {
+      color: var(--primary);
+      font-size: 1.35rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    h3 {
+      color: var(--primary-light);
+      font-size: 1.05rem;
+      margin: 1.2rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 0.8rem; }
+
+    ul, ol { padding-right: 1.5rem; margin-bottom: 0.8rem; }
+    li { margin-bottom: 0.3rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+
+    th {
+      background: var(--primary);
+      color: white;
+      padding: 0.65rem 1rem;
+      text-align: right;
+    }
+
+    td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:nth-child(even) td { background: #f8fafc; }
+    tr:hover td { background: #eef4fb; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .badge-ok { background: #d5f5e3; color: #1e8449; }
+    .badge-warn { background: #fdebd0; color: #b7770d; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #ebf5fb, #d6eaf8);
+      border-radius: 8px;
+      padding: 1.2rem;
+      text-align: center;
+      border: 1px solid #aed6f1;
+    }
+
+    .stat-card .value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .stat-card .label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+    }
+
+    .flow {
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.9;
+      direction: ltr;
+      text-align: center;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .confusion {
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      gap: 0;
+      max-width: 480px;
+      margin: 1.5rem auto;
+      font-size: 0.9rem;
+    }
+
+    .confusion .header {
+      background: var(--primary);
+      color: white;
+      padding: 0.6rem;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .confusion .row-label {
+      background: #ecf0f1;
+      padding: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      border: 1px solid var(--border);
+    }
+
+    .confusion .cell {
+      padding: 1rem;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+
+    .confusion .tn { background: #d5f5e3; }
+    .confusion .tp { background: #d5f5e3; }
+    .confusion .fp { background: #fadbd8; }
+    .confusion .fn { background: #fadbd8; }
+
+    .cell-num { font-size: 1.4rem; font-weight: 700; display: block; }
+    .cell-type { font-size: 0.78rem; color: var(--muted); }
+
+    code {
+      background: #eef2f7;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.88rem;
+      direction: ltr;
+      display: inline-block;
+    }
+
+    pre {
+      background: #1e2a3a;
+      color: #a8d8a8;
+      padding: 1rem 1.2rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      direction: ltr;
+      text-align: left;
+      margin: 0.8rem 0;
+    }
+
+    .note {
+      background: #fef9e7;
+      border-right: 4px solid var(--warn);
+      padding: 0.8rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+
+    .success {
+      background: #eafaf1;
+      border-right: 4px solid var(--accent);
+      padding: 0.8rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 1rem 0;
+    }
+
+    .toc ol { padding-right: 1.2rem; }
+    .toc a { color: var(--primary-light); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 2rem;
+      padding: 1rem;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      section { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>דוח מודל סיווג ECG בינארי</h1>
+    <p class="subtitle">תקין / לא תקין — מודל 1D CNN כללי על MIT-BIH Arrhythmia Database</p>
+    <div class="meta">
+      <span>📅 29 ביוני 2026</span>
+      <span>🏥 MIT-BIH / PhysioNet</span>
+      <span>🧠 1D CNN</span>
+      <span>⏱ ~26 דקות אימון</span>
+    </div>
+  </header>
+
+  <!-- Summary -->
+  <section>
+    <h2>סיכום מנהלים</h2>
+    <div class="summary-grid">
+      <div class="stat-card">
+        <div class="value">84.07%</div>
+        <div class="label">Test Accuracy</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">93.26%</div>
+        <div class="label">Recall (Abnormal)</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">63.90%</div>
+        <div class="label">Precision (Abnormal)</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">0.758</div>
+        <div class="label">F1-score</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">Epoch 5</div>
+        <div class="label">מודל שנבחר</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">29</div>
+        <div class="label">מטופלים (מתוך 48)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOC -->
+  <section class="toc">
+    <h2>תוכן עניינים</h2>
+    <ol>
+      <li><a href="#requirements">מטרת המודל ודרישות</a></li>
+      <li><a href="#dataset">מקור הנתונים</a></li>
+      <li><a href="#preprocessing">עיבוד הנתונים</a></li>
+      <li><a href="#split">חלוקת הדאטה סט</a></li>
+      <li><a href="#architecture">ארכיטקטורת המודל</a></li>
+      <li><a href="#training">הגדרות ותהליך האימון</a></li>
+    <li><a href="#model-selection">בחירת המודל</a></li>
+      <li><a href="#results">תוצאות</a></li>
+      <li><a href="#confusion">Confusion Matrix</a></li>
+      <li><a href="#analysis">ניתוח ביצועים</a></li>
+      <li><a href="#files">קבצי פלט</a></li>
+      <li><a href="#conclusions">מסקנות</a></li>
+    </ol>
+  </section>
+
+  <!-- Requirements -->
+  <section id="requirements">
+    <h2>1. מטרת המודל ודרישות</h2>
+    <p>פיתוח מודל <strong>כללי אחד</strong> לסיווג בינארי של אות ECG:</p>
+    <table>
+      <tr><th>תווית</th><th>משמעות</th><th>ערך</th></tr>
+      <tr><td>Normal</td><td>דופק תקין</td><td>0</td></tr>
+      <tr><td>Abnormal</td><td>דופק לא תקין</td><td>1</td></tr>
+    </table>
+    <h3>עמידה בדרישות</h3>
+    <table>
+      <tr><th>#</th><th>דרישה</th><th>סטטוס</th></tr>
+      <tr><td>1</td><td>סיווג בינארי — תקין / לא תקין</td><td><span class="badge badge-ok">✅</span></td></tr>
+      <tr><td>2</td><td>Preprocessing: סינון, נרמול, חלונות זמן</td><td><span class="badge badge-ok">✅</span></td></tr>
+      <tr><td>3</td><td>דאטה סט MIT-BIH (PhysioNet)</td><td><span class="badge badge-ok">✅</span></td></tr>
+      <tr><td>4</td><td>חלוקה ל-Train / Validation / Test</td><td><span class="badge badge-ok">✅</span></td></tr>
+      <tr><td>5</td><td>1D CNN</td><td><span class="badge badge-ok">✅</span></td></tr>
+    </table>
+  </section>
+
+  <!-- Dataset -->
+  <section id="dataset">
+    <h2>2. מקור הנתונים</h2>
+    <table>
+      <tr><th>פריט</th><th>ערך</th></tr>
+      <tr><td>מקור</td><td><a href="https://www.physionet.org/content/mitdb/1.0.0/" target="_blank">MIT-BIH Arrhythmia Database — PhysioNet</a></td></tr>
+      <tr><td>נתיב</td><td><code>dataset/mitbih_database/</code></td></tr>
+      <tr><td>קצב דגימה</td><td>360 Hz</td></tr>
+      <tr><td>מטופלים בדאטה</td><td>48</td></tr>
+      <tr><td>מטופלים לאחר סינון</td><td>29</td></tr>
+    </table>
+  </section>
+
+  <!-- Preprocessing -->
+  <section id="preprocessing">
+    <h2>3. תהליך עיבוד הנתונים (Preprocessing)</h2>
+    <p>העיבוד מתבצע ב-<code>src/data_processing.py</code> לכל מטופל בנפרד:</p>
+
+    <table>
+      <tr><th>שלב</th><th>פעולה</th><th>פרטים</th></tr>
+      <tr><td>1</td><td>טעינה</td><td>CSV (אות) + annotations (תיוגים)</td></tr>
+      <tr><td>2</td><td><strong>סינון רעש</strong></td><td>Bandpass Butterworth, 0.4–30 Hz, fs=360</td></tr>
+      <tr><td>3</td><td><strong>Normalization</strong></td><td>Min-Max לטווח [0, 1] לכל מטופל</td></tr>
+      <tr><td>4</td><td><strong>Segmentation</strong></td><td>חלונות של שנייה (360 דגימות), תיוג בינארי</td></tr>
+      <tr><td>5</td><td>Resampling</td><td>128 דגימות לכל חלון</td></tr>
+      <tr><td>6</td><td>Reshape</td><td>(N, 1, 128) — קלט ל-CNN</td></tr>
+      <tr><td>7</td><td>סינון מטופלים</td><td>19 מטופלים עם &lt;0.9% abnormal — הוצאו</td></tr>
+    </table>
+
+    <h3>תיוג בינארי</h3>
+    <table>
+      <tr><th>מחלקה</th><th>Annotations</th><th>ערך</th></tr>
+      <tr><td>Normal</td><td>N</td><td>0</td></tr>
+      <tr><td>Abnormal</td><td>L, R, V, A, a, j, S, F, E, e, r, !, f, /</td><td>1</td></tr>
+      <tr><td>נזרקים</td><td>Q, ?, non-beat</td><td>—</td></tr>
+    </table>
+
+    <h3>מטופלים שהוצאו (19)</h3>
+    <p><code>101, 103, 107, 109, 111, 112, 113, 115, 117, 118, 121, 122, 123, 124, 207, 214, 230, 232, 234</code></p>
+  </section>
+
+  <!-- Split -->
+  <section id="split">
+    <h2>4. חלוקת הדאטה סט</h2>
+    <div class="note">
+      <strong>עקרון:</strong> החלוקה לפי <strong>Patient ID</strong> — beats מאותו מטופל לא מתערבבים בין splits. מונע data leakage.
+    </div>
+
+    <table>
+      <tr><th>Split</th><th>מטופלים</th><th>רשימה</th></tr>
+      <tr>
+        <td><strong>Train</strong></td>
+        <td>19</td>
+        <td>100, 105, 106, 108, 114, 116, 201, 202, 205, 208, 209, 212, 215, 219, 221, 222, 223, 228, 233</td>
+      </tr>
+      <tr>
+        <td><strong>Validation</strong></td>
+        <td>5</td>
+        <td>102, 104, 200, 213, 217</td>
+      </tr>
+      <tr>
+        <td><strong>Test</strong></td>
+        <td>5</td>
+        <td><strong>119, 203, 210, 220, 231</strong></td>
+      </tr>
+    </table>
+    <p>Seed: 42 | val_ratio: 0.15 | test_ratio: 0.15</p>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture">
+    <h2>5. ארכיטקטורת המודל — 1D CNN</h2>
+    <table>
+      <tr><th>רכיב</th><th>פירוט</th></tr>
+      <tr><td>Input</td><td>(batch, 1, 128)</td></tr>
+      <tr><td>Conv1d ראשוני</td><td>1 → 32 channels, kernel=1</td></tr>
+      <tr><td>Blocks</td><td>4 × (Conv1d × 2 + skip + MaxPool1d), 32 channels, kernel=5</td></tr>
+      <tr><td>Flatten</td><td>→ 160 features</td></tr>
+      <tr><td>Linear</td><td>160 → 160 → 1</td></tr>
+      <tr><td>Output</td><td>Sigmoid → הסתברות [0,1], threshold ≥ 0.5 = Abnormal</td></tr>
+      <tr><td>Loss</td><td>Binary Cross Entropy (BCELoss)</td></tr>
+    </table>
+  </section>
+
+  <!-- Training -->
+  <section id="training">
+    <h2>6. הגדרות ותהליך האימון</h2>
+    <table>
+      <tr><th>פרמטר</th><th>ערך</th></tr>
+      <tr><td>Optimizer</td><td>Adam, lr=0.001</td></tr>
+      <tr><td>LR Scheduler</td><td>ReduceLROnPlateau (×0.5, patience=5)</td></tr>
+      <tr><td>Batch Size</td><td>32</td></tr>
+      <tr><td>Epochs</td><td>30</td></tr>
+      <tr><td>Weighted Sampling</td><td>True</td></tr>
+      <tr><td>Weight Decay</td><td>1e-4</td></tr>
+      <tr><td>Device</td><td>CPU</td></tr>
+    </table>
+
+    <h3>תהליך מקצה לקצה</h3>
+    <div class="flow">48 מטופלים MIT-BIH
+        ↓
+Preprocessing (Filter → Norm → Segment → Resample)
+        ↓
+סינון → 29 מטופלים תקפים
+        ↓
+חלוקה: 19 Train | 5 Val | 5 Test
+        ↓
+אימון 1D CNN — 30 epochs
+        ↓
+שמירת best_model.pth (epoch 5)
+        ↓
+הערכה על 5 מטופלי Test</div>
+
+    <h3>פקודת האימון</h3>
+    <pre>python src/main.py --mode general-training --output_path ./output/general_model/ --n_epochs 30</pre>
+  </section>
+
+  <!-- Model Selection -->
+  <section id="model-selection">
+    <h2>7. בחירת המודל שנשמר</h2>
+    <p>המודל נבחר לפי <strong>validation loss הנמוך ביותר</strong>.</p>
+
+    <table>
+      <tr><th>Epoch</th><th>Val Loss</th><th>נשמר?</th></tr>
+      <tr><td>0</td><td>0.6339</td><td>✅ best עד כה</td></tr>
+      <tr><td>4</td><td>0.6010</td><td>✅ best עד כה</td></tr>
+      <tr style="background:#d5f5e3"><td><strong>5</strong></td><td><strong>0.4714</strong></td><td><strong>✅ המודל הסופי</strong></td></tr>
+      <tr><td>6–29</td><td>0.49 – 2.61</td><td>❌ loss עלה</td></tr>
+    </table>
+
+    <div class="success">
+      <strong>קובץ שנשמר:</strong> <code>output/general_model/best_model.pth</code> (812 KB, Epoch 5)
+    </div>
+
+    <h3>מדדי Validation ב-Epoch 5</h3>
+    <table>
+      <tr><th>מטריקה</th><th>ערך</th></tr>
+      <tr><td>Validation Loss</td><td>0.4714</td></tr>
+      <tr><td>Validation Accuracy</td><td>81.47%</td></tr>
+      <tr><td>Validation Recall</td><td>0.8455</td></tr>
+      <tr><td>Validation Precision</td><td>0.8917</td></tr>
+      <tr><td>Validation F1</td><td>0.8680</td></tr>
+    </table>
+  </section>
+
+  <!-- Results -->
+  <section id="results">
+    <h2>8. תוצאות</h2>
+
+    <h3>Test Set — מטופלים חדשים (119, 203, 210, 220, 231)</h3>
+    <table>
+      <tr><th>מטריקה</th><th>ערך</th></tr>
+      <tr><td>Loss</td><td>0.6182</td></tr>
+      <tr><td><strong>Accuracy</strong></td><td><strong>84.07%</strong></td></tr>
+      <tr><td>Balanced Accuracy</td><td>86.98%</td></tr>
+      <tr><td><strong>Recall (Abnormal)</strong></td><td><strong>93.26%</strong></td></tr>
+      <tr><td>Precision (Abnormal)</td><td>63.90%</td></tr>
+      <tr><td>F1-score</td><td>0.758</td></tr>
+      <tr><td>Specificity (Normal)</td><td>~80.70%</td></tr>
+      <tr><td>סה"כ דגימות Test</td><td>8,574</td></tr>
+    </table>
+
+    <h3>Train vs Validation vs Test</h3>
+    <table>
+      <tr><th>Split</th><th>Accuracy</th><th>הערות</th></tr>
+      <tr><td>Train (epoch 29)</td><td>99.93%</td><td>overfitting</td></tr>
+      <tr><td>Validation (epoch 5 — best)</td><td>81.47%</td><td>מודל שנבחר</td></tr>
+      <tr><td><strong>Test (held-out)</strong></td><td><strong>84.07%</strong></td><td>הערכה סופית</td></tr>
+    </table>
+  </section>
+
+  <!-- Confusion Matrix -->
+  <section id="confusion">
+    <h2>9. Confusion Matrix ופרשנות</h2>
+
+    <div class="confusion">
+      <div></div>
+      <div class="header">חיזוי Normal</div>
+      <div class="header">חיזוי Abnormal</div>
+
+      <div class="row-label">בפועל Normal</div>
+      <div class="cell tn">
+        <span class="cell-num">5,064</span>
+        <span class="cell-type">TN — נכון</span>
+      </div>
+      <div class="cell fp">
+        <span class="cell-num">1,211</span>
+        <span class="cell-type">FP — false alarm</span>
+      </div>
+
+      <div class="row-label">בפועל Abnormal</div>
+      <div class="cell fn">
+        <span class="cell-num">155</span>
+        <span class="cell-type">FN — פוספס</span>
+      </div>
+      <div class="cell tp">
+        <span class="cell-num">2,144</span>
+        <span class="cell-type">TP — נכון</span>
+      </div>
+    </div>
+
+    <h3>פרשנות</h3>
+    <div class="success">
+      <strong>נקודות חוזק:</strong>
+      <ul>
+        <li><strong>Recall 93.3%</strong> — תופס את רוב הדופקים החריגים (155 FN בלבד מתוך 2,299)</li>
+        <li><strong>Accuracy 84%</strong> — ביצועים סבירים על מטופלים חדשים</li>
+      </ul>
+    </div>
+    <div class="note">
+      <strong>נקודות לשיפור:</strong>
+      <ul>
+        <li><strong>Precision 64%</strong> — 1,211 false positives (תקינים שסווגו כחריגים)</li>
+        <li><strong>Overfitting</strong> — Train 99.9% vs Test 84%</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Analysis -->
+  <section id="analysis">
+    <h2>10. ניתוח ביצועים</h2>
+    <h3>מגמת Validation Loss</h3>
+    <table>
+      <tr><th>Epoch</th><th>Val Loss</th><th>Val Accuracy</th><th>Val F1</th></tr>
+      <tr><td>0</td><td>0.6339</td><td>76.20%</td><td>0.839</td></tr>
+      <tr style="background:#d5f5e3"><td><strong>5</strong></td><td><strong>0.4714</strong></td><td>81.47%</td><td>0.868</td></tr>
+      <tr><td>8</td><td>0.4898</td><td>82.96%</td><td>0.885</td></tr>
+      <tr><td>20</td><td>1.1454</td><td>82.47%</td><td>0.878</td></tr>
+      <tr><td>29</td><td>2.4225</td><td>82.08%</td><td>0.878</td></tr>
+    </table>
+    <p>לאחר epoch 5 ה-validation loss עלה — המודל overfit לנתוני האימון.</p>
+
+    <h3>Learning Rate Schedule</h3>
+    <table>
+      <tr><th>Epochs</th><th>Learning Rate</th></tr>
+      <tr><td>0–11</td><td>0.001</td></tr>
+      <tr><td>12–17</td><td>0.0005</td></tr>
+      <tr><td>18–23</td><td>0.00025</td></tr>
+      <tr><td>24–29</td><td>0.000125</td></tr>
+    </table>
+  </section>
+
+  <!-- Files -->
+  <section id="files">
+    <h2>11. קבצי פלט</h2>
+    <table>
+      <tr><th>קובץ</th><th>תיאור</th></tr>
+      <tr><td><code>output/general_model/best_model.pth</code></td><td>המודל הטוב ביותר (epoch 5, 812 KB)</td></tr>
+      <tr><td><code>output/general_model/patient_splits.json</code></td><td>חלוקת מטופלים</td></tr>
+      <tr><td><code>output/general_model/train.log</code></td><td>מטריקות אימון לכל epoch</td></tr>
+      <tr><td><code>output/general_model/val.log</code></td><td>מטריקות validation לכל epoch</td></tr>
+      <tr><td><code>output/general_model/test.log</code></td><td>מטריקות test סופיות</td></tr>
+    </table>
+
+    <h3>פקודות</h3>
+    <pre>python src/main.py --mode general-training --output_path ./output/general_model/
+python src/main.py --mode test --model_path ./output/general_model/best_model.pth</pre>
+  </section>
+
+  <!-- Conclusions -->
+  <section id="conclusions">
+    <h2>12. מסקנות</h2>
+    <ol>
+      <li><strong>כל 5 דרישות הפרויקט ממומשות</strong> — סיווג בינארי, preprocessing, MIT-BIH, 3 splits, 1D CNN.</li>
+      <li><strong>המודל מתכלל</strong> — 84% accuracy על 5 מטופלים חדשים.</li>
+      <li><strong>Recall גבוה (93%)</strong> — מתאים כשחשוב לא לפספס חריגים.</li>
+      <li><strong>Precision בינוני (64%)</strong> — false positives; ניתן לשפר עם threshold tuning.</li>
+      <li><strong>Overfitting</strong> — המודל נבחר ב-epoch 5; epochs מאוחרים לא שיפרו generalization.</li>
+      <li><strong>המלצות:</strong> Early stopping, Dropout, threshold optimization, data augmentation.</li>
+    </ol>
+  </section>
+
+  <footer>
+    דוח זה נוצר אוטומטית מהרצת האימון ב-29/06/2026 &nbsp;|&nbsp; ECG-Heartbeat-Classification
+  </footer>
+
+</div>
+</body>
+</html>

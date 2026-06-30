@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartECG Assist</title>
+  <style>
+    :root {
+      --red: #c0392b;
+      --red-light: #e74c3c;
+      --red-soft: #fdecea;
+      --red-glow: rgba(192, 57, 43, 0.12);
+      --ok: #1e8449;
+      --ok-bg: #eafaf1;
+      --text: #2d3436;
+      --muted: #636e72;
+      --card: #ffffff;
+      --border: #f0d6d3;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(180deg, #fff9f8 0%, #fdf2f0 40%, #fafafa 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      padding: 2.8rem 1.5rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, var(--red-glow) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .logo-wrap {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .heart-ecg {
+      position: relative;
+      width: 88px;
+      height: 88px;
+    }
+
+    .heart-ecg svg.heart {
+      width: 72px;
+      height: 72px;
+      fill: var(--red-light);
+      filter: drop-shadow(0 4px 12px rgba(231, 76, 60, 0.35));
+      animation: heartbeat 1.4s ease-in-out infinite;
+    }
+
+    @keyframes heartbeat {
+      0%, 100% { transform: scale(1); }
+      14% { transform: scale(1.08); }
+      28% { transform: scale(1); }
+      42% { transform: scale(1.05); }
+      56% { transform: scale(1); }
+    }
+
+    .ecg-line {
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 36px;
+      overflow: visible;
+    }
+
+    .ecg-line path {
+      fill: none;
+      stroke: var(--red);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 320;
+      stroke-dashoffset: 320;
+      animation: ecg-draw 2.4s ease-in-out infinite;
+    }
+
+    @keyframes ecg-draw {
+      0% { stroke-dashoffset: 320; opacity: 0.4; }
+      40% { stroke-dashoffset: 0; opacity: 1; }
+      100% { stroke-dashoffset: -320; opacity: 0.4; }
+    }
+
+    .app-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--red);
+      letter-spacing: -0.02em;
+    }
+
+    .app-subtitle {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-top: 0.15rem;
+    }
+
+    .project-name {
+      font-size: 0.95rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .tagline {
+      margin-top: 0.5rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 1.25rem 3rem;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 8px 32px rgba(192, 57, 43, 0.07);
+      border: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--red-light);
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Upload ── */
+    .upload-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .upload-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 160px;
+      border: 2px dashed #e8b4b0;
+      border-radius: 14px;
+      background: var(--red-soft);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      padding: 2rem 1.5rem;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--red-light);
+      background: #fce8e6;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px var(--red-glow);
+    }
+
+    .upload-zone input { display: none; }
+
+    .upload-icon {
+      width: 48px;
+      height: 48px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.85rem;
+      box-shadow: 0 2px 10px var(--red-glow);
+    }
+
+    .upload-icon svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--red-light);
+    }
+
+    .upload-text {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .upload-sub {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+
+    .file-name {
+      margin-top: 0.75rem;
+      padding: 0.4rem 1rem;
+      background: white;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      color: var(--red);
+      font-weight: 500;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-name.empty { color: var(--muted); font-weight: 400; background: transparent; }
+
+    .btn-analyze {
+      width: 100%;
+      max-width: 280px;
+      padding: 0.9rem 2rem;
+      background: linear-gradient(135deg, var(--red-light), var(--red));
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 16px rgba(192, 57, 43, 0.3);
+    }
+
+    .btn-analyze:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(192, 57, 43, 0.4);
+    }
+
+    .btn-analyze:disabled {
+      background: #ccc;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* ── Loading / Error ── */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 1rem 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .loading.active { display: block; }
+
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--red-light);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 0.6rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error {
+      display: none;
+      background: #fdedec;
+      color: var(--red);
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      text-align: center;
+      width: 100%;
+    }
+    .error.active { display: block; }
+
+    .server-status {
+      text-align: center;
+      padding: 0.55rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 500;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    .server-status.online {
+      background: #eafaf1;
+      color: #1e8449;
+      border: 1px solid #a9dfbf;
+    }
+    .server-status.offline {
+      background: #fdedec;
+      color: var(--red);
+      border: 1px solid #f5b7b1;
+    }
+
+    /* ── Results ── */
+    #results { display: none; }
+    #results.active { display: block; }
+
+    .result-hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    @media (max-width: 480px) {
+      .result-hero { grid-template-columns: 1fr; }
+    }
+
+    .result-pill {
+      border-radius: 14px;
+      padding: 1.5rem 1rem;
+      text-align: center;
+    }
+
+    .result-pill.normal {
+      background: var(--ok-bg);
+      border: 2px solid #a9dfbf;
+    }
+
+    .result-pill.abnormal {
+      background: var(--red-soft);
+      border: 2px solid #e8b4b0;
+    }
+
+    .result-pill .label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+
+    .result-pill .value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .result-pill.normal .value { color: var(--ok); }
+    .result-pill.abnormal .value { color: var(--red); }
+
+    .result-pill .en {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .stat {
+      background: #fafafa;
+      border-radius: 10px;
+      padding: 0.85rem;
+      text-align: center;
+      border: 1px solid #eee;
+    }
+
+    .stat .val {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--red);
+    }
+
+    .stat .lbl {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 0.15rem;
+    }
+
+    #plot-img {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-top: 0.75rem;
+    }
+
+    .plot-caption {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
+    footer {
+      text-align: center;
+      color: #b2bec3;
+      font-size: 0.78rem;
+      padding: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="logo-wrap">
+      <div class="heart-ecg">
+        <svg class="heart" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+        <div class="ecg-line">
+          <svg viewBox="0 0 200 36" preserveAspectRatio="none">
+            <path d="M0,18 L30,18 L38,18 L44,6 L52,30 L58,18 L90,18 L98,18 L104,10 L112,28 L118,18 L200,18"/>
+          </svg>
+        </div>
+      </div>
+      <h1 class="app-title">SmartECG Assist</h1>
+      <p class="app-subtitle">ECG Heartbeat Classification</p>
+      <p class="project-name">Afeka &nbsp;·&nbsp; Machine Learning Project</p>
+      <p class="tagline">סיווג אק״ג בינארי — תקין / לא תקין</p>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <div id="server-status" class="server-status offline">בודק חיבור לשרת...</div>
+
+    <section class="card">
+      <div class="card-title">העלאת נתונים</div>
+      <div class="upload-section">
+        <label class="upload-zone" id="drop-zone">
+          <input type="file" id="file-input" accept=".csv">
+          <div class="upload-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="upload-text">גרור קובץ CSV לכאן</div>
+          <div class="upload-sub">או לחץ לבחירה מהמחשב</div>
+          <div class="file-name empty" id="file-name">לא נבחר קובץ</div>
+        </label>
+
+        <button class="btn-analyze" id="analyze-btn" disabled>נתח אות ECG</button>
+
+        <div class="error" id="error-box"></div>
+        <div class="loading" id="loading">
+          <div class="spinner"></div>
+          מנתח...
+        </div>
+      </div>
+    </section>
+
+    <section id="results">
+      <div class="card">
+        <div class="card-title">תוצאות</div>
+        <div class="result-hero">
+          <div class="result-pill" id="label-box">
+            <div class="label">תוצאה</div>
+            <div class="value" id="result-label">—</div>
+            <div class="en" id="result-label-en"></div>
+          </div>
+          <div class="result-pill" id="conf-box">
+            <div class="label">מידת ביטחון</div>
+            <div class="value" id="result-confidence">—</div>
+            <div class="en">אחוזים</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="val" id="stat-windows">—</div><div class="lbl">חלונות שנותחו</div></div>
+          <div class="stat"><div class="val" id="stat-abnormal">—</div><div class="lbl">חלונות לא תקינים</div></div>
+          <div class="stat"><div class="val" id="stat-mean">—</div><div class="lbl">הסתברות Abnormal</div></div>
+          <div class="stat"><div class="val" id="stat-duration">—</div><div class="lbl">אורך (שניות)</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">אות ECG</div>
+        <img id="plot-img" alt="ECG plot">
+        <p class="plot-caption">אזורים מודגשים באדום = חלונות שסווגו כלא תקין</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>SmartECG Assist &nbsp;·&nbsp; ECG Heartbeat Classification &nbsp;·&nbsp; 1D CNN</footer>
+
+  <script>
+    const fileInput = document.getElementById('file-input');
+    const dropZone = document.getElementById('drop-zone');
+    const fileName = document.getElementById('file-name');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const loading = document.getElementById('loading');
+    const errorBox = document.getElementById('error-box');
+    const results = document.getElementById('results');
+    const serverStatus = document.getElementById('server-status');
+    const API = window.location.origin;
+
+    let selectedFile = null;
+    let serverOnline = false;
+
+    function setServerStatus(online, text) {
+      serverOnline = online;
+      serverStatus.className = 'server-status ' + (online ? 'online' : 'offline');
+      serverStatus.textContent = text;
+      if (!online && !selectedFile) analyzeBtn.disabled = true;
+      else if (online && selectedFile) analyzeBtn.disabled = false;
+    }
+
+    function setFile(file) {
+      if (!file || !file.name.toLowerCase().endsWith('.csv')) {
+        showError('יש להעלות קובץ CSV בלבד.');
+        return;
+      }
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileName.classList.remove('empty');
+      analyzeBtn.disabled = !serverOnline;
+      hideError();
+    }
+
+    fileInput.addEventListener('change', e => setFile(e.target.files[0]));
+
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      setFile(e.dataTransfer.files[0]);
+    });
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.classList.add('active');
+    }
+    function hideError() { errorBox.classList.remove('active'); }
+
+    function friendlyError(err) {
+      const msg = err.message || String(err);
+      if (msg === 'Failed to fetch' || msg.includes('NetworkError')) {
+        return 'השרת לא זמין. פתח טרמינל והרץ: python web/app.py ואז גלוש ל-http://127.0.0.1:8080';
+      }
+      if (msg.includes('aborted') || err.name === 'AbortError') {
+        return 'הניתוח לקח יותר מדי זמן. נסה קובץ קטן יותר.';
+      }
+      return msg;
+    }
+
+    async function checkServer() {
+      if (location.protocol === 'file:') {
+        setServerStatus(false, '⚠ פתח דרך השרת: http://127.0.0.1:8080');
+        showError('אל תפתח את index.html ישירות. הרץ: python web/app.py');
+        return false;
+      }
+      try {
+        const res = await fetch(API + '/health', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.model_exists) {
+          setServerStatus(false, '⚠ המודל לא נמצא');
+          showError('המודל לא נמצא. הרץ: python src/main.py --mode general-training');
+          return false;
+        }
+        setServerStatus(true, '● מחובר לשרת — מוכן לניתוח');
+        hideError();
+        return true;
+      } catch {
+        setServerStatus(false, '⚠ השרת לא פעיל');
+        showError('הפעל בטרמינל: cd ECG-Heartbeat-Classification && python web/app.py');
+        return false;
+      }
+    }
+
+    checkServer();
+    setInterval(checkServer, 5000);
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      const ok = await checkServer();
+      if (!ok) return;
+
+      analyzeBtn.disabled = true;
+      loading.classList.add('active');
+      results.classList.remove('active');
+      hideError();
+
+      const form = new FormData();
+      form.append('file', selectedFile);
+
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 120000);
+
+        const res = await fetch(API + '/api/predict', {
+          method: 'POST',
+          body: form,
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error('תשובה לא תקינה מהשרת. ודא שהשרת רץ.');
+        }
+        if (!res.ok) throw new Error(data.error || 'שגיאה בניתוח');
+
+        const labelBox = document.getElementById('label-box');
+        const isAbnormal = data.label === 'Abnormal';
+        labelBox.className = 'result-pill ' + (isAbnormal ? 'abnormal' : 'normal');
+
+        document.getElementById('result-label').textContent = data.label_he;
+        document.getElementById('result-label-en').textContent = data.label;
+        document.getElementById('result-confidence').textContent = data.confidence_percent + '%';
+        document.getElementById('stat-windows').textContent = data.windows_analyzed;
+        document.getElementById('stat-abnormal').textContent = data.abnormal_windows;
+        document.getElementById('stat-mean').textContent = data.mean_abnormal_probability + '%';
+        document.getElementById('stat-duration').textContent = data.duration_seconds;
+        document.getElementById('plot-img').src = 'data:image/png;base64,' + data.plot_base64;
+
+        results.classList.add('active');
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        showError(friendlyError(err));
+      } finally {
+        loading.classList.remove('active');
+        analyzeBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

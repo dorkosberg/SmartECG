@@ -2,7 +2,9 @@ import argparse
 
 
 def parse_opts():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='General binary ECG classifier (Normal vs Abnormal) trained on MIT-BIH patients.'
+    )
 
     # |----------------------------------------- Init settings ------------------------------------------------------|
     parser.add_argument(
@@ -12,31 +14,45 @@ def parse_opts():
         help='The data directory path under which the dataset lies.')
     parser.add_argument(
         '--output_path',
-        default='./output/',
+        default='./output/general_model/',
         type=str,
-        help='The output directory path where the checkpoints and log files are created.')
+        help='Directory for checkpoints, logs, and patient split metadata.')
     parser.add_argument(
-        '--state',
-        default='pre-training',
+        '--mode',
+        default='general-training',
         type=str,
-        help='(pre-training | baseline individuals | fine-tuning individuals)')
+        choices=['general-training', 'test'],
+        help='general-training: train one model on multiple patients; test: evaluate a saved checkpoint.')
     parser.add_argument(
-        '--selected_patients_fine_tuning',
-        default=['100', '102', '104', '105', '106', '108', '114', '116', '119', '200', '202', '201', '203', '205',
-                 '208', '209', '212', '210', '213', '215', '217', '219', '220', '222', '221', '228', '223', '231',
-                 '233'],
+        '--model_path',
+        default=None,
         type=str,
-        nargs='+',
-        help='The list of the selected patients earmarked for the experiments. '
-             'Only applies to the baseline individual models and fine-tuning models that target certain patients.')
+        help='Path to a saved checkpoint (.pth). Required for --mode test.')
+    parser.add_argument(
+        '--splits_path',
+        default=None,
+        type=str,
+        help='Path to patient_splits.json. Defaults to the file next to model_path or output_path.')
     parser.add_argument(
         '--input_size',
         default=128,
         type=int,
         help='The size of each pulse-width window')
     parser.add_argument(
-        '--pretrain_path', default='./output/save_16.pth', type=str,
-        help='The pre-trained model checkpoint (.pth)')
+        '--seed',
+        default=42,
+        type=int,
+        help='Random seed used for patient-level train/val/test splits.')
+    parser.add_argument(
+        '--val_ratio',
+        default=0.15,
+        type=float,
+        help='Fraction of patients reserved for validation.')
+    parser.add_argument(
+        '--test_ratio',
+        default=0.15,
+        type=float,
+        help='Fraction of patients reserved for held-out testing.')
 
     # |------------------------------------------ CNN default settings ----------------------------------------------|
     parser.add_argument(
@@ -69,22 +85,17 @@ def parse_opts():
     parser.add_argument(
         '--weight_decay', default=1e-4, type=float, help='Weight decay hyperparameter value of optimizer')
     parser.add_argument(
-        '--early_stopping',
-        action='store_false',
-        help='Set to TRUE only for baseline or fine-tuning mode.')
-    parser.set_defaults(early_stopping=False)
-    parser.add_argument(
         '--n_epochs',
         default=30,
         type=int,
         help='The maximum number of total epochs to run.')
 
-    # |---------------------------------------- Pre-training settings -----------------------------------------------|
+    # |---------------------------------------- General training settings --------------------------------------------|
     parser.add_argument(
         '--batch_size',
         default=32,
         type=int,
-        help='Batch size used during pre-training.')
+        help='Batch size used during training.')
     parser.add_argument(
         '--learning_rate',
         default=0.001,

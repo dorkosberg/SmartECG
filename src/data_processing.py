@@ -1,4 +1,6 @@
+import json
 import os
+
 import numpy as np
 import pandas as pd
 import torch
@@ -9,7 +11,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler, RandomSampler
 
 
 def z_norm(signal):
-    """ Normalizes the input signal of a single patient; Fits all values between 0 and 1. """
+    """Normalizes the input signal of a single patient; fits all values between 0 and 1."""
     return (signal - min(signal)) / (max(signal) - min(signal))
 
 
@@ -45,13 +47,9 @@ def get_patientData(dataPath, patient, norm=True, movingAverage=False, window=10
 
 
 def split_to_windows(beat, annotations, window_size=360):
-    """ This function segments the given ecg signal of a single patient to 1 second windows. It also converts the
-    annotations to binary labels (0:normal window, 1:window with abnormality) and discards unclassified samples('Q',
-    '?' and 'non-beat' annotations).
+    """Segment one patient's ECG into 1-second windows and map beat annotations to binary labels.
 
-        Parameters ---------- beat : ecg signal of patient annotations : array-like 0bject containing the label of
-        each sample of the signal window_size : size of desired window in terms of samples taken per second (default
-        is 360 as the sampling rate of the dataset is 360 Hz)
+    Normal = 0, Abnormal = 1. Unclassified beats ('Q', '?', non-beat) are discarded.
     """
 
     # Create a dataframe where each row is one window. The last window is padded.
@@ -82,7 +80,7 @@ def split_to_windows(beat, annotations, window_size=360):
 
 
 def resample_beats(beats, sample_size):
-    """ Resamples input beats to fixed dimension. """
+    """Resamples input beats to fixed dimension."""
 
     beats_resampled = np.zeros((len(beats), sample_size))
     for i in range(beats_resampled.shape[0] - 1):
@@ -102,49 +100,128 @@ def exclude_patients(labels):
         return False
 
 
-def resize_input(train_data, test_data):
+def resize_input(data):
     # Convert (N, D) to (N, 1, D) to fit the 1D CNN
-    train_data = train_data.reshape((train_data.shape[0], 1, train_data.shape[1]))
-    test_data = test_data.reshape((test_data.shape[0], 1, test_data.shape[1]))
-
-    return train_data, test_data
+    return data.reshape((data.shape[0], 1, data.shape[1]))
 
 
-def createData(opt, data_list):
-    train_data, test_data, train_labels, test_labels = [], [], [], []
+def load_patient_windows(opt, patient):
+    """Load, filter, normalize, segment, and resample one patient's ECG beats."""
+    signal, signal_notes = get_patientData(
+        opt.data_path, patient, norm=True, movingAverage=False, bandpassFilter=True
+    )
+    windows, labels = split_to_windows(signal.beat, signal_notes)
+    windows_resampled = resample_beats(windows, opt.input_size)
+    return windows_resampled, labels
 
-    for patient in data_list:
-        # Get the processed signal of the current patient and its annotations
-        signal, signal_notes = get_patientData(opt.data_path, patient, norm=True, movingAverage=False,
-                                               bandpassFilter=True)
-        # Split signal into 1 second windows
-        windows, labels = split_to_windows(signal.beat, signal_notes)
-        # Resample every window to the same fixed size
-        windows_resampled = resample_beats(windows, opt.input_size)
-        # Exclude patients belonging in extreme cases
+
+def load_patients_data(opt, patient_ids):
+    """Load preprocessed beat windows for each patient, excluding extreme class-imbalance cases."""
+    patient_data = {}
+    for patient in patient_ids:
+        windows, labels = load_patient_windows(opt, patient)
         if exclude_patients(labels):
+            print(f"Excluding patient {patient} due to class imbalance.")
             continue
-        # Split data to train and test sets
-        train_set, test_set, train_annotations, test_annotations = train_test_split(windows_resampled, labels,
-                                                                                    test_size=0.2, random_state=42, stratify=labels)
-        # Fill arrays
-        train_data.append(train_set)
-        test_data.append(test_set)
-        train_labels.extend(train_annotations)
-        test_labels.extend(test_annotations)
+        patient_data[patient] = (windows, labels)
+    return patient_data
 
-    # Create global training and test datasets with all patients
-    train_data = np.concatenate(train_data)
-    test_data = np.concatenate(test_data)
-    train_labels = np.array(train_labels)
-    test_labels = np.array(test_labels)
 
-    # Resize data to fit the CNN input
-    train_data, test_data = resize_input(train_data, test_data)
-    # Split training data to train and validation sets
-    x_train, x_val, y_train, y_val = train_test_split(train_data, train_labels, test_size=0.2, random_state=42, stratify=train_labels)
+def split_patients_by_id(patient_ids, val_ratio=0.15, test_ratio=0.15, random_state=42):
+    """Split patients into train / validation / test sets.
 
-    return x_train, x_val, y_train, y_val, test_data, test_labels
+    Beats from the same patient are never mixed across splits.
+    """
+    if val_ratio + test_ratio >= 1.0:
+        raise ValueError("val_ratio + test_ratio must be less than 1.0")
+
+    train_val_patients, test_patients = train_test_split(
+        patient_ids,
+        test_size=test_ratio,
+        random_state=random_state,
+        shuffle=True,
+    )
+    relative_val_ratio = val_ratio / (1.0 - test_ratio)
+    train_patients, val_patients = train_test_split(
+        train_val_patients,
+        test_size=relative_val_ratio,
+        random_state=random_state,
+        shuffle=True,
+    )
+
+    return {
+        'train': sorted(train_patients),
+        'val': sorted(val_patients),
+        'test': sorted(test_patients),
+    }
+
+
+def concatenate_patient_splits(patient_data, patient_ids):
+    """Concatenate beat windows from a list of patients into global arrays."""
+    if not patient_ids:
+        raise ValueError("Patient split is empty; no data available for this partition.")
+
+    data_arrays = []
+    label_arrays = []
+    for patient in patient_ids:
+        windows, labels = patient_data[patient]
+        data_arrays.append(windows)
+        label_arrays.append(labels)
+
+    data = np.concatenate(data_arrays)
+    labels = np.concatenate(label_arrays)
+    return resize_input(data), labels
+
+
+def save_patient_splits(patient_splits, output_path):
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as split_file:
+        json.dump(patient_splits, split_file, indent=2)
+
+
+def load_patient_splits(splits_path):
+    with open(splits_path, 'r', encoding='utf-8') as split_file:
+        return json.load(split_file)
+
+
+def createData(opt, all_patients, patient_splits=None):
+    """Create train / validation / test datasets using patient-level splits only."""
+    patient_data = load_patients_data(opt, all_patients)
+    valid_patients = sorted(patient_data.keys())
+
+    if not valid_patients:
+        raise ValueError("No valid patients found after preprocessing and exclusion filters.")
+
+    if patient_splits is None:
+        patient_splits = split_patients_by_id(
+            valid_patients,
+            val_ratio=opt.val_ratio,
+            test_ratio=opt.test_ratio,
+            random_state=opt.seed,
+        )
+    else:
+        for split_name in ('train', 'val', 'test'):
+            unknown_patients = set(patient_splits[split_name]) - set(valid_patients)
+            if unknown_patients:
+                raise ValueError(
+                    f"Split '{split_name}' references unknown or excluded patients: {sorted(unknown_patients)}"
+                )
+
+    x_train, y_train = concatenate_patient_splits(patient_data, patient_splits['train'])
+    x_val, y_val = concatenate_patient_splits(patient_data, patient_splits['val'])
+    x_test, y_test = concatenate_patient_splits(patient_data, patient_splits['test'])
+
+    print(
+        "Patient split sizes:",
+        f"train={len(patient_splits['train'])},",
+        f"val={len(patient_splits['val'])},",
+        f"test={len(patient_splits['test'])}",
+    )
+    print("Train patients:", patient_splits['train'])
+    print("Validation patients:", patient_splits['val'])
+    print("Test patients:", patient_splits['test'])
+
+    return x_train, x_val, y_train, y_val, x_test, y_test, patient_splits
 
 
 def get_balanced_sampler(annotations):
