@@ -10,16 +10,13 @@ SRC = os.path.join(ROOT, 'src')
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
-from inference import get_model, run_inference  # noqa: E402
+from inference import FS, get_model, run_inference  # noqa: E402
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200 MB uploads
-DEFAULT_MODEL = os.environ.get(
-    'MODEL_PATH',
-    os.path.join(ROOT, 'output', 'general_model', 'best_model.pth'),
-)
+DEFAULT_MODEL = os.path.join(ROOT, 'output', 'general_model', 'best_model.pth')
 
 
 @app.after_request
@@ -42,8 +39,8 @@ def predict():
     uploaded = request.files['file']
     if not uploaded.filename:
         return jsonify({'error': 'שם הקובץ ריק.'}), 400
-    if not uploaded.filename.lower().endswith('.csv'):
-        return jsonify({'error': 'יש להעלות קובץ CSV בלבד.'}), 400
+    if not uploaded.filename.lower().endswith(('.csv', '.txt', '.tsv')):
+        return jsonify({'error': 'יש להעלות קובץ CSV, TXT או TSV.'}), 400
 
     model_path = request.form.get('model_path', DEFAULT_MODEL)
     if not os.path.exists(model_path):
@@ -51,7 +48,10 @@ def predict():
 
     try:
         uploaded.seek(0)
-        result = run_inference(uploaded, model_path)
+        sampling_rate = float(request.form.get('sampling_rate', FS))
+        if sampling_rate <= 0:
+            return jsonify({'error': 'קצב דגימה חייב להיות מספר חיובי.'}), 400
+        result = run_inference(uploaded, model_path, sampling_rate=sampling_rate)
         return jsonify(result)
     except Exception as exc:
         traceback.print_exc()
@@ -77,8 +77,11 @@ def _preload_model():
         print(f'WARNING: model not found at {DEFAULT_MODEL}')
 
 
+# Load model on import (gunicorn on Render does not run __main__)
+_preload_model()
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    _preload_model()
     print(f'\n  SmartECG Assist ready at: http://127.0.0.1:{port}\n')
     app.run(host='0.0.0.0', port=port, debug=False)

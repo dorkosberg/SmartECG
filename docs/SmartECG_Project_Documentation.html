@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>SmartECG Assist — תיעוד פרויקט</title>
+  <style>
+    @page { size: A4; margin: 2cm; }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      color: #222;
+      line-height: 1.65;
+      font-size: 11pt;
+      direction: rtl;
+      text-align: right;
+    }
+    h1 { color: #c0392b; font-size: 22pt; border-bottom: 2px solid #e8b4b0; padding-bottom: 8px; }
+    h2 { color: #1a5276; font-size: 15pt; margin-top: 24px; page-break-after: avoid; }
+    h3 { color: #2980b9; font-size: 12pt; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+    th { background: #1a5276; color: white; padding: 8px; text-align: right; }
+    td { border: 1px solid #ddd; padding: 7px 10px; }
+    tr:nth-child(even) td { background: #f8f9fa; }
+    code, pre {
+      font-family: Menlo, Consolas, monospace;
+      background: #f4f4f4;
+      direction: ltr;
+      text-align: left;
+    }
+    pre { padding: 10px; border-radius: 6px; font-size: 9pt; white-space: pre-wrap; }
+    code { padding: 2px 5px; border-radius: 3px; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+    ul, ol { padding-right: 22px; }
+    .cover {
+      text-align: center;
+      padding: 60px 0 40px;
+      page-break-after: always;
+    }
+    .cover h1 { border: none; font-size: 28pt; }
+    .cover p { color: #555; font-size: 12pt; }
+    blockquote { border-right: 4px solid #c0392b; margin: 0; padding: 8px 16px; background: #fdf2f0; }
+    @media print {
+      body { font-size: 10pt; }
+      h2 { page-break-before: auto; }
+      pre, table { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <h1>SmartECG Assist</h1>
+    <p>תיעוד פרויקט מלא — ECG Heartbeat Classification</p>
+    <p>Afeka · Machine Learning · 1D CNN · MIT-BIH</p>
+    <p>יוני 2026</p>
+  </div>
+  <h1>SmartECG Assist — תיעוד פרויקט מלא</h1>
+<p><strong>פרויקט:</strong> ECG Heartbeat Classification<br />
+<strong>מוסד:</strong> Afeka — Machine Learning<br />
+<strong>מודל:</strong> 1D CNN כללי לסיווג בינארי של אות ECG<br />
+<strong>דאטה סט:</strong> MIT-BIH Arrhythmia Database (PhysioNet)<br />
+<strong>תאריך עדכון:</strong> יוני 2026  </p>
+<hr />
+<h2>תוכן עניינים</h2>
+<ol>
+<li><a href="#1-סקירת-הפרויקט">סקירת הפרויקט</a></li>
+<li><a href="#2-מטרה-ודרישות">מטרה ודרישות</a></li>
+<li><a href="#3-דאטה-סט-mit-bih">דאטה סט MIT-BIH</a></li>
+<li><a href="#4-עיבוד-מקדים-preprocessing">עיבוד מקדים (Preprocessing)</a></li>
+<li><a href="#5-חלוקת-הנתונים">חלוקת הנתונים</a></li>
+<li><a href="#6-ארכיטקטורת-המודל--1d-cnn">ארכיטקטורת המודל — 1D CNN</a></li>
+<li><a href="#7-אימון-והערכה">אימון והערכה</a></li>
+<li><a href="#8-תוצאות-המודל">תוצאות המודל</a></li>
+<li><a href="#9-דף-הנחיתה--smartecg-assist">דף הנחיתה — SmartECG Assist</a></li>
+<li><a href="#10-מבנה-הפרויקט">מבנה הפרויקט</a></li>
+<li><a href="#11-פקודות-הרצה">פקודות הרצה</a></li>
+<li><a href="#12-מסקנות">מסקנות</a></li>
+</ol>
+<hr />
+<h2>1. סקירת הפרויקט</h2>
+<h3>1.1 רקע</h3>
+<p>הפרויקט פותח במסגרת קורס Machine Learning באפקה. מטרתו לבנות <strong>מסווג בינארי כללי</strong> לאות ECG (אק"ג), שמסווג כל חלון זמן של אות הלב כ:</p>
+<table>
+<thead>
+<tr>
+<th>תווית</th>
+<th>משמעות</th>
+<th>ערך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Normal</strong></td>
+<td>דופק תקין</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>Abnormal</strong></td>
+<td>דופק לא תקין (חריג)</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<h3>1.2 שינוי מרכזי בפרויקט</h3>
+<p>בגרסה המקורית, הפרויקט כלל:<br />
+- <strong>Pre-training</strong> על כל המטופלים<br />
+- <strong>Fine-tuning</strong> נפרד לכל מטופל<br />
+- <strong>מודל נפרד</strong> לכל מטופל (<code>individuals</code>)</p>
+<p><strong>בגרסה הנוכחית</strong> (SmartECG Assist):<br />
+- <strong>מודל 1D CNN אחד</strong> לכל המטופלים<br />
+- <strong>אין</strong> fine-tuning per-patient<br />
+- חלוקת דאטה <strong>לפי מזהה מטופל</strong> (מניעת data leakage)<br />
+- <strong>דף נחיתה</strong> להעלאת קבצי ECG וקבלת חיזוי בזמן אמת</p>
+<h3>1.3 זרימת המערכת</h3>
+<pre><code>MIT-BIH CSV + Annotations
+        ↓
+   Preprocessing
+   (סינון, נרמול, חלונות, resample)
+        ↓
+   חלוקה: Train / Val / Test (לפי מטופל)
+        ↓
+   אימון 1D CNN
+        ↓
+   שמירת best_model.pth
+        ↓
+   הערכה על מטופלי Test
+        ↓
+   דף נחיתה (SmartECG Assist) — העלאת CSV חדש
+</code></pre>
+<hr />
+<h2>2. מטרה ודרישות</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>דרישה</th>
+<th>מימוש</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>סיווג בינארי — תקין / לא תקין</td>
+<td>תוויות 0/1, BCELoss, Sigmoid</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Preprocessing: סינון, נרמול, חלונות</td>
+<td><code>data_processing.py</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>דאטה סט MIT-BIH</td>
+<td><code>dataset/mitbih_database/</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>חלוקה Train / Validation / Test</td>
+<td><code>split_patients_by_id()</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>1D CNN</td>
+<td><code>models/cnn1D.py</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3. דאטה סט MIT-BIH</h2>
+<h3>3.1 מקור</h3>
+<ul>
+<li><strong>שם:</strong> MIT-BIH Arrhythmia Database  </li>
+<li><strong>קישור:</strong> https://www.physionet.org/content/mitdb/1.0.0/  </li>
+<li><strong>נתיב בפרויקט:</strong> <code>dataset/mitbih_database/</code></li>
+</ul>
+<h3>3.2 מבנה הקבצים</h3>
+<p>לכל מטופל (record) יש שני קבצים:</p>
+<table>
+<thead>
+<tr>
+<th>קובץ</th>
+<th>תוכן</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{id}.csv</code></td>
+<td>אות ECG — עמודות: sample #, MLII, V5 (לעיתים)</td>
+</tr>
+<tr>
+<td><code>{id}annotations.txt</code></td>
+<td>תיוג beat-by-beat</td>
+</tr>
+</tbody>
+</table>
+<p><strong>דוגמה</strong> (<code>100.csv</code>):</p>
+<pre><code>'sample #','MLII','V5'
+0,995,1011
+1,995,1011
+...
+</code></pre>
+<h3>3.3 פרמטרים טכניים</h3>
+<table>
+<thead>
+<tr>
+<th>פרמטר</th>
+<th>ערך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>קצב דגימה</td>
+<td>360 Hz</td>
+</tr>
+<tr>
+<td>מספר מטופלים בדאטה</td>
+<td>48</td>
+</tr>
+<tr>
+<td>מטופלים לאחר סינון</td>
+<td>29</td>
+</tr>
+<tr>
+<td>משך רשומה טיפוסי</td>
+<td>~30 דקות</td>
+</tr>
+</tbody>
+</table>
+<h3>3.4 תיוגים (Annotations)</h3>
+<p><strong>Normal (0):</strong><br />
+- <code>N</code> — Normal beat</p>
+<p><strong>Abnormal (1):</strong><br />
+- <code>L</code>, <code>R</code>, <code>V</code>, <code>A</code>, <code>a</code>, <code>j</code>, <code>S</code>, <code>F</code>, <code>E</code>, <code>e</code>, <code>r</code>, <code>!</code>, <code>f</code>, <code>/</code></p>
+<p><strong>נזרקים:</strong><br />
+- <code>Q</code>, <code>?</code> — לא מסווגים</p>
+<h3>3.5 סינון מטופלים</h3>
+<p>מטופלים עם פחות מ-<strong>0.9%</strong> דופקים abnormal <strong>מוצאים</strong> מהאימון (חוסר איזון קיצוני).</p>
+<p><strong>19 מטופלים הוצאו:</strong><br />
+101, 103, 107, 109, 111, 112, 113, 115, 117, 118, 121, 122, 123, 124, 207, 214, 230, 232, 234</p>
+<hr />
+<h2>4. עיבוד מקדים (Preprocessing)</h2>
+<p>כל עיבוד מתבצע ב-<code>src/data_processing.py</code> (אימון) ו-<code>src/inference.py</code> (דף נחיתה).</p>
+<h3>4.1 שלב 1 — טעינה</h3>
+<ul>
+<li>קריאת אות ECG מהעמודה השנייה (Lead MLII)</li>
+<li>קריאת annotations לתיוג (באימון בלבד)</li>
+</ul>
+<h3>4.2 שלב 2 — סינון רעש (Bandpass Filter)</h3>
+<table>
+<thead>
+<tr>
+<th>פרמטר</th>
+<th>ערך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>סוג</td>
+<td>Butterworth Bandpass</td>
+</tr>
+<tr>
+<td>תדר נמוך</td>
+<td>0.4 Hz</td>
+</tr>
+<tr>
+<td>תדר גבוה</td>
+<td>30 Hz</td>
+</tr>
+<tr>
+<td>קצב דגימה</td>
+<td>360 Hz</td>
+</tr>
+<tr>
+<td>סדר (order)</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<p><strong>מטרה:</strong> הסרת baseline wander ורעשים בתדרים גבוהים.</p>
+<h3>4.3 שלב 3 — Normalization</h3>
+<ul>
+<li><strong>Min-Max normalization</strong> לטווח [0, 1] <strong>לכל מטופל בנפרד</strong></li>
+<li>נוסחה: <code>(signal - min) / (max - min)</code></li>
+</ul>
+<h3>4.4 שלב 4 — Segmentation (חלונות זמן)</h3>
+<ul>
+<li>חלוקה לחלונות של <strong>שנייה אחת</strong> = <strong>360 דגימות</strong> (ב-360 Hz)</li>
+<li>לכל חלון — תיוג לפי annotations:</li>
+<li>אם יש לפחות beat abnormal אחד בחלון → <strong>Abnormal (1)</strong></li>
+<li>אחרת, אם יש Normal → <strong>Normal (0)</strong></li>
+<li>beats לא מסווגים → החלון <strong>נזרק</strong></li>
+</ul>
+<h3>4.5 שלב 5 — Resampling</h3>
+<ul>
+<li>כל חלון מושם לגודל קבוע: <strong>128 דגימות</strong></li>
+<li>נדרש כדי שכל קלט ל-CNN יהיה באורך אחיד</li>
+</ul>
+<h3>4.6 שלב 6 — Reshape</h3>
+<ul>
+<li>המרה מ-<code>(N, 128)</code> ל-<code>(N, 1, 128)</code> — ערוץ אחד, אורך 128</li>
+</ul>
+<hr />
+<h2>5. חלוקת הנתונים</h2>
+<h3>5.1 עקרון מרכזי</h3>
+<p>החלוקה מתבצעת <strong>לפי מזהה מטופל (Patient ID)</strong> — <strong>לא</strong> אקראית לפי beat.</p>
+<blockquote>
+<p>כל ה-beats של מטופל נמצאים <strong>רק</strong> באחד מה-splits.<br />
+זה מונע <strong>data leakage</strong> ומאפשר לבדוק התכללות למטופלים חדשים.</p>
+</blockquote>
+<h3>5.2 יחסי החלוקה</h3>
+<table>
+<thead>
+<tr>
+<th>Split</th>
+<th>אחוז</th>
+<th>מספר מטופלים</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Train</strong></td>
+<td>~65.5%</td>
+<td>19</td>
+</tr>
+<tr>
+<td><strong>Validation</strong></td>
+<td>~17.2%</td>
+<td>5</td>
+</tr>
+<tr>
+<td><strong>Test</strong></td>
+<td>~17.2%</td>
+<td>5</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Seed:</strong> 42 (לשחזוריות)</li>
+<li><strong>פרמטרים:</strong> <code>val_ratio=0.15</code>, <code>test_ratio=0.15</code></li>
+</ul>
+<h3>5.3 רשימת מטופלים</h3>
+<p><strong>Train (19):</strong><br />
+100, 105, 106, 108, 114, 116, 201, 202, 205, 208, 209, 212, 215, 219, 221, 222, 223, 228, 233</p>
+<p><strong>Validation (5):</strong><br />
+102, 104, 200, 213, 217</p>
+<p><strong>Test (5):</strong><br />
+119, 203, 210, 220, 231</p>
+<p>החלוקה נשמרת ב: <code>output/general_model/patient_splits.json</code></p>
+<hr />
+<h2>6. ארכיטקטורת המודל — 1D CNN</h2>
+<p>המודל מוגדר ב-<code>src/models/cnn1D.py</code> — רשת CNN חד-ממדית בסגנון ResNet (skip connections).</p>
+<h3>6.1 קלט ופלט</h3>
+<table>
+<thead>
+<tr>
+<th>פריט</th>
+<th>ערך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Input</strong></td>
+<td><code>(batch, 1, 128)</code> — חלון ECG בודד</td>
+</tr>
+<tr>
+<td><strong>Output</strong></td>
+<td>הסתברות בין 0 ל-1 (Sigmoid)</td>
+</tr>
+<tr>
+<td><strong>Threshold</strong></td>
+<td>≥ 0.5 → Abnormal, &lt; 0.5 → Normal</td>
+</tr>
+</tbody>
+</table>
+<h3>6.2 מבנה הרשת</h3>
+<pre><code>Input (1, 128)
+    ↓
+Conv1d: 1 → 32 channels, kernel=1
+    ↓
+ReLU
+    ↓
+4 × Block:
+    Conv1d → Conv1d → Skip Connection → ReLU → MaxPool1d
+    (32 channels, kernel=5)
+    ↓
+Flatten → 160 features
+    ↓
+Linear: 160 → 160
+    ↓
+Linear: 160 → 1
+    ↓
+Sigmoid → הסתברות
+</code></pre>
+<h3>6.3 Block (בלוק בסיסי)</h3>
+<p>כל Block כולל:<br />
+1. <strong>Conv1d</strong> — שכבת קונבולוציה ראשונה + ReLU<br />
+2. <strong>Conv1d</strong> — שכבת קונבולוציה שנייה<br />
+3. <strong>Skip connection</strong> — חיבור קצר (residual)<br />
+4. <strong>MaxPool1d</strong> — הקטנת ממדים</p>
+<h3>6.4 פרמטרים</h3>
+<table>
+<thead>
+<tr>
+<th>פרמטר</th>
+<th>ערך ברירת מחדל</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>num_blocks</code></td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>block_channels</code></td>
+<td>32</td>
+</tr>
+<tr>
+<td><code>kernel_size</code></td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>num_features</code></td>
+<td>160</td>
+</tr>
+</tbody>
+</table>
+<h3>6.5 פונקציית Loss</h3>
+<ul>
+<li><strong>Binary Cross Entropy (BCELoss)</strong></li>
+<li>Optimizer: <strong>Adam</strong>, lr=0.001</li>
+<li>LR Scheduler: <strong>ReduceLROnPlateau</strong></li>
+</ul>
+<hr />
+<h2>7. אימון והערכה</h2>
+<h3>7.1 הגדרות אימון</h3>
+<table>
+<thead>
+<tr>
+<th>פרמטר</th>
+<th>ערך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Epochs</td>
+<td>30</td>
+</tr>
+<tr>
+<td>Batch size</td>
+<td>32</td>
+</tr>
+<tr>
+<td>Learning rate</td>
+<td>0.001</td>
+</tr>
+<tr>
+<td>Weight decay</td>
+<td>1e-4</td>
+</tr>
+<tr>
+<td>Weighted sampling</td>
+<td>True</td>
+</tr>
+<tr>
+<td>Device</td>
+<td>CPU / CUDA</td>
+</tr>
+</tbody>
+</table>
+<h3>7.2 בחירת המודל</h3>
+<ul>
+<li>נשמר <strong><code>best_model.pth</code></strong> לפי <strong>validation loss הנמוך ביותר</strong></li>
+<li>המודל שנבחר: <strong>Epoch 5</strong> (val loss = 0.4714)</li>
+<li>לאחר האימון — טעינת best model והערכה על <strong>מטופלי Test</strong></li>
+</ul>
+<h3>7.3 פקודות</h3>
+<p><strong>אימון:</strong></p>
+<pre><code class="language-bash">python src/main.py --mode general-training --output_path ./output/general_model/
+</code></pre>
+<p><strong>הערכה:</strong></p>
+<pre><code class="language-bash">python src/main.py --mode test --model_path ./output/general_model/best_model.pth
+</code></pre>
+<hr />
+<h2>8. תוצאות המודל</h2>
+<h3>8.1 מטריקות על Test Set (מטופלים חדשים)</h3>
+<table>
+<thead>
+<tr>
+<th>מטריקה</th>
+<th>ערך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Accuracy</strong></td>
+<td>84.07%</td>
+</tr>
+<tr>
+<td><strong>Precision</strong></td>
+<td>0.639</td>
+</tr>
+<tr>
+<td><strong>Recall</strong></td>
+<td>0.933</td>
+</tr>
+<tr>
+<td><strong>F1-score</strong></td>
+<td>0.758</td>
+</tr>
+<tr>
+<td><strong>Balanced Accuracy</strong></td>
+<td>86.98%</td>
+</tr>
+</tbody>
+</table>
+<h3>8.2 Confusion Matrix</h3>
+<pre><code>                    חיזוי Normal    חיזוי Abnormal
+בפועל Normal          5,064 (TN)       1,211 (FP)
+בפועל Abnormal          155 (FN)       2,144 (TP)
+</code></pre>
+<h3>8.3 פרשנות</h3>
+<ul>
+<li><strong>Recall גבוה (93%)</strong> — המודל תופס את רוב הדופקים החריגים</li>
+<li><strong>Precision בינוני (64%)</strong> — יש false positives (תקינים שסווגו כחריגים)</li>
+<li><strong>Overfitting</strong> — Train accuracy ~99% לעומת Test ~84%</li>
+</ul>
+<hr />
+<h2>9. דף הנחיתה — SmartECG Assist</h2>
+<h3>9.1 מטרה</h3>
+<p>ממשק ווב לבדיקת אות ECG חדש <strong>ללא צורך ב-annotations</strong> — המשתמש מעלה קובץ CSV ומקבל:<br />
+- תוצאה: <strong>תקין / לא תקין</strong><br />
+- <strong>מידת ביטחון</strong> (אחוזים)<br />
+- <strong>גרף אות ECG</strong> עם סימון חלונות abnormal<br />
+- סטטיסטיקות (חלונות שנותחו, עמודה שזוהתה)</p>
+<h3>9.2 קבצים</h3>
+<table>
+<thead>
+<tr>
+<th>קובץ</th>
+<th>תפקיד</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>web/app.py</code></td>
+<td>שרת Flask</td>
+</tr>
+<tr>
+<td><code>web/templates/index.html</code></td>
+<td>ממשק משתמש</td>
+</tr>
+<tr>
+<td><code>src/inference.py</code></td>
+<td>טעינה, preprocessing, חיזוי, גרף</td>
+</tr>
+<tr>
+<td><code>SmartECG_Assist.command</code></td>
+<td>הפעלה בלחיצה כפולה (Mac)</td>
+</tr>
+</tbody>
+</table>
+<h3>9.3 הפעלה</h3>
+<p><strong>דרך 1 — לחיצה כפולה:</strong></p>
+<pre><code>SmartECG_Assist.command
+</code></pre>
+<p><strong>דרך 2 — טרמינל:</strong></p>
+<pre><code class="language-bash">cd ECG-Heartbeat-Classification
+python web/app.py
+</code></pre>
+<p>ואז: <strong>http://127.0.0.1:8080</strong></p>
+<blockquote>
+<p><strong>חשוב:</strong> אין לפתוח את <code>index.html</code> ישירות מהתיקייה — חובה דרך השרת.</p>
+</blockquote>
+<h3>9.4 תמיכה בפורמטי קבצים</h3>
+<table>
+<thead>
+<tr>
+<th>פורמט</th>
+<th>נתמך</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MIT-BIH (<code>sample #, MLII, V5</code>)</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>עמודה אחת עם ערכי ECG</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>CSV עם מפריד <code>;</code> או TAB</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>קבצי <code>.txt</code>, <code>.tsv</code></td>
+<td>✅</td>
+</tr>
+<tr>
+<td>זיהוי אוטומטי של עמודת ECG</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<h3>9.5 קצב דגימה</h3>
+<ul>
+<li>ברירת מחדל: <strong>360 Hz</strong> (MIT-BIH)</li>
+<li>ניתן לשנות בשדה "קצב דגימה (Hz)" בדף</li>
+<li>האות מנורמל ל-360 Hz לפני הניתוח</li>
+</ul>
+<h3>9.6 חישוב תוצאות בדף</h3>
+<ol>
+<li>האות מתחלק לחלונות של שנייה (360 דגימות)</li>
+<li>המודל מחזיר הסתברות abnormal לכל חלון (עד 300 חלונות)</li>
+<li><strong>תוצאה כוללת:</strong> ממוצע ההסתברויות ≥ 0.5 → Abnormal</li>
+<li><strong>ביטחון:</strong> אם Abnormal → הממוצע; אם Normal → 1 − ממוצע</li>
+<li><strong>גרף:</strong> 15 השניות הראשונות, אזורים אדומים = חלונות abnormal</li>
+</ol>
+<h3>9.7 מגבלות</h3>
+<ul>
+<li>נותחים עד <strong>300 חלונות</strong> (~5 דקות) לביצועים</li>
+<li>המודל אומן על MIT-BIH — תוצאות על דאטה סטים אחרים עשויות להיות פחות מדויקות</li>
+<li>אין אבחנה רפואית — כלי מחקר/הדגמה בלבד</li>
+</ul>
+<hr />
+<h2>10. מבנה הפרויקט</h2>
+<pre><code>ECG-Heartbeat-Classification/
+├── dataset/mitbih_database/     # דאטה סט MIT-BIH
+├── src/
+│   ├── main.py                  # נקודת כניסה — אימון / test
+│   ├── data_processing.py       # preprocessing + חלוקה
+│   ├── inference.py             # חיזוי לדף נחיתה
+│   ├── running.py               # לולאת אימון
+│   ├── models/cnn1D.py          # ארכיטקטורת 1D CNN
+│   └── training/                # train / val / test epochs
+├── web/
+│   ├── app.py                   # שרת Flask
+│   └── templates/index.html     # SmartECG Assist UI
+├── output/general_model/
+│   ├── best_model.pth           # מודל שנבחר
+│   ├── patient_splits.json      # חלוקת מטופלים
+│   └── *.log                    # לוגים
+├── docs/                        # מסמכי תיעוד
+├── SmartECG_Assist.command        # הפעלת דף נחיתה
+└── run_web.sh
+</code></pre>
+<hr />
+<h2>11. פקודות הרצה</h2>
+<table>
+<thead>
+<tr>
+<th>פעולה</th>
+<th>פקודה</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>אימון מודל</td>
+<td><code>python src/main.py --mode general-training</code></td>
+</tr>
+<tr>
+<td>הערכת מודל</td>
+<td><code>python src/main.py --mode test --model_path ./output/general_model/best_model.pth</code></td>
+</tr>
+<tr>
+<td>דף נחיתה</td>
+<td><code>python web/app.py</code> → http://127.0.0.1:8080</td>
+</tr>
+<tr>
+<td>הפעלה מהירה (Mac)</td>
+<td>לחיצה כפולה על <code>SmartECG_Assist.command</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>12. מסקנות</h2>
+<ol>
+<li>הפרויקט מממש <strong>מסווג ECG בינארי כללי</strong> על MIT-BIH עם <strong>1D CNN</strong>.</li>
+<li><strong>חלוקה לפי מטופל</strong> מבטיחה הערכה הוגנת על מטופלים חדשים.</li>
+<li>המודל משיג <strong>84% accuracy</strong> ו-<strong>93% recall</strong> על מטופלי test.</li>
+<li><strong>SmartECG Assist</strong> מאפשר בדיקת קבצי ECG חדשים דרך ממשק ווב.</li>
+<li>יש מקום לשיפור ב-precision ולהפחתת overfitting.</li>
+</ol>
+<hr />
+<p><em>מסמך זה נוצר עבור פרויקט ECG Heartbeat Classification — Afeka, Machine Learning.</em></p>
+</body>
+</html>

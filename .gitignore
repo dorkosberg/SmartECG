@@ -172,9 +172,8 @@ poetry.toml
 
 # End of https://www.toptal.com/developers/gitignore/api/python
 
-# Large local data — do not deploy to Render
-dataset/
+# --- SmartECG deploy ---
+# dataset/ and output/general_model/best_model.pth are included on purpose
 .DS_Store
 output/smoke_test/
-output/general_model_run.log
-output/**/*.log
+*.log

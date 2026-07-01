@@ -257,6 +257,34 @@
       cursor: not-allowed;
     }
 
+    .fs-row {
+      width: 100%;
+      max-width: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+    }
+
+    .fs-row label {
+      font-size: 0.88rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .fs-row input {
+      width: 90px;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      text-align: center;
+    }
+
     /* ── Loading / Error ── */
     .loading {
       display: none;
@@ -284,8 +312,10 @@
       padding: 0.75rem 1rem;
       border-radius: 10px;
       font-size: 0.9rem;
-      text-align: center;
+      text-align: right;
       width: 100%;
+      white-space: pre-line;
+      line-height: 1.7;
     }
     .error.active { display: block; }
 
@@ -436,7 +466,7 @@
       <div class="card-title">העלאת נתונים</div>
       <div class="upload-section">
         <label class="upload-zone" id="drop-zone">
-          <input type="file" id="file-input" accept=".csv">
+          <input type="file" id="file-input" accept=".csv,.txt,.tsv">
           <div class="upload-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -444,10 +474,15 @@
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
           </div>
-          <div class="upload-text">גרור קובץ CSV לכאן</div>
-          <div class="upload-sub">או לחץ לבחירה מהמחשב</div>
+          <div class="upload-text">גרור קובץ ECG לכאן</div>
+          <div class="upload-sub">CSV / TXT — עמודה מספרית אחת או יותר</div>
           <div class="file-name empty" id="file-name">לא נבחר קובץ</div>
         </label>
+
+        <div class="fs-row">
+          <label for="sampling-rate">קצב דגימה (Hz)</label>
+          <input type="number" id="sampling-rate" value="360" min="50" max="2000" step="1">
+        </div>
 
         <button class="btn-analyze" id="analyze-btn" disabled>נתח אות ECG</button>
 
@@ -478,7 +513,8 @@
           <div class="stat"><div class="val" id="stat-windows">—</div><div class="lbl">חלונות שנותחו</div></div>
           <div class="stat"><div class="val" id="stat-abnormal">—</div><div class="lbl">חלונות לא תקינים</div></div>
           <div class="stat"><div class="val" id="stat-mean">—</div><div class="lbl">הסתברות Abnormal</div></div>
-          <div class="stat"><div class="val" id="stat-duration">—</div><div class="lbl">אורך (שניות)</div></div>
+          <div class="stat"><div class="val" id="stat-duration">—</div><div class="lbl">משך שנותח (שניות)</div></div>
+          <div class="stat"><div class="val" id="stat-column">—</div><div class="lbl">עמודת ECG שזוהתה</div></div>
         </div>
       </div>
 
@@ -516,8 +552,8 @@
     }
 
     function setFile(file) {
-      if (!file || !file.name.toLowerCase().endsWith('.csv')) {
-        showError('יש להעלות קובץ CSV בלבד.');
+      if (!file || !/\.(csv|txt|tsv)$/i.test(file.name)) {
+        showError('יש להעלות קובץ CSV, TXT או TSV.');
         return;
       }
       selectedFile = file;
@@ -559,8 +595,15 @@
 
     async function checkServer() {
       if (location.protocol === 'file:') {
-        setServerStatus(false, '⚠ פתח דרך השרת: http://127.0.0.1:8080');
-        showError('אל תפתח את index.html ישירות. הרץ: python web/app.py');
+        setServerStatus(false, '⚠ לא לפתוח את הקובץ ישירות');
+        showError(
+          'פתחת את index.html ישירות מהתיקייה — כך זה לא יעבוד.\n\n' +
+          'דרך 1 (הכי קל): לחץ פעמיים על הקובץ SmartECG_Assist.command בתיקיית הפרויקט.\n\n' +
+          'דרך 2: בטרמינל הרץ:\n' +
+          'cd ECG-Heartbeat-Classification\n' +
+          'python web/app.py\n' +
+          'ואז פתח בדפדפן: http://127.0.0.1:8080'
+        );
         return false;
       }
       try {
@@ -597,6 +640,7 @@
 
       const form = new FormData();
       form.append('file', selectedFile);
+      form.append('sampling_rate', document.getElementById('sampling-rate').value || '360');
 
       try {
         const controller = new AbortController();
@@ -628,6 +672,7 @@
         document.getElementById('stat-abnormal').textContent = data.abnormal_windows;
         document.getElementById('stat-mean').textContent = data.mean_abnormal_probability + '%';
         document.getElementById('stat-duration').textContent = data.duration_seconds;
+        document.getElementById('stat-column').textContent = data.ecg_column || '—';
         document.getElementById('plot-img').src = 'data:image/png;base64,' + data.plot_base64;
 
         results.classList.add('active');

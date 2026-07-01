@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from scipy.signal import resample
 from data_processing import butter_bandpass_filter, resample_beats, z_norm
 from models import cnn1D
 
@@ -19,16 +20,126 @@ MAX_WINDOWS = 300
 PLOT_SECONDS = 15
 
 
-def load_signal_from_csv(file_obj):
-    """Load ECG signal from an uploaded CSV (MIT-BIH format: sample index + lead column)."""
-    max_samples = WINDOW_SIZE * MAX_WINDOWS + WINDOW_SIZE
-    df = pd.read_csv(file_obj, usecols=[0, 1], nrows=max_samples)
-    if df.shape[1] < 2:
-        raise ValueError('CSV must contain at least two columns: sample index and ECG values.')
+ECG_COLUMN_HINTS = (
+    'ecg', 'mlii', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6',
+    'lead', 'signal', 'value', 'amplitude', 'volt', 'beat', 'channel',
+)
+INDEX_COLUMN_HINTS = (
+    'sample', 'index', 'time', 'id', '#', 'timestamp', 'sec', 'second', 'frame',
+)
 
-    signal = df.iloc[:, 1].astype(float).reset_index(drop=True)
-    signal.name = 'beat'
-    return signal
+
+def _read_csv_flexible(file_obj, nrows=None):
+    """Read CSV/TSV with auto delimiter detection and common encodings."""
+    if hasattr(file_obj, 'seek'):
+        file_obj.seek(0)
+    raw = file_obj.read()
+    if isinstance(raw, bytes):
+        for encoding in ('utf-8-sig', 'utf-8', 'latin-1'):
+            try:
+                text = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            text = raw.decode('utf-8', errors='replace')
+    else:
+        text = raw
+
+    errors = []
+    for sep in (None, ',', ';', '\t', '|'):
+        try:
+            df = pd.read_csv(
+                io.StringIO(text),
+                sep=sep,
+                engine='python',
+                nrows=nrows,
+            )
+            if df.shape[1] >= 1 and df.shape[0] >= 1:
+                return df
+        except Exception as exc:
+            errors.append(str(exc))
+    raise ValueError(
+        'לא ניתן לקרוא את הקובץ. ודא שזה CSV עם עמודת ערכים מספרית של אות ECG.'
+    )
+
+
+def _is_index_like(series, column_name):
+    name = str(column_name).lower().strip().strip("'\"")
+    if any(hint in name for hint in INDEX_COLUMN_HINTS):
+        return True
+
+    numeric = pd.to_numeric(series, errors='coerce').dropna()
+    if len(numeric) < 20:
+        return False
+
+    diffs = numeric.diff().dropna()
+    if len(diffs) == 0:
+        return False
+
+    # Sample counter: 0,1,2,... or 0.0,1.0,2.0,...
+    if (diffs.round(6).nunique() == 1) and (abs(diffs.mean() - 1.0) < 0.01):
+        return True
+
+  # Time column in seconds: monotonic increasing, low variance relative to signal
+    if 'time' in name and numeric.is_monotonic_increasing:
+        return True
+
+    return False
+
+
+def _pick_ecg_column(df):
+    """Pick the most likely ECG amplitude column from arbitrary CSV layouts."""
+    scored = []
+
+    for col in df.columns:
+        series = pd.to_numeric(df[col], errors='coerce')
+        valid_ratio = series.notna().mean()
+        if valid_ratio < 0.5:
+            continue
+
+        series = series.dropna().reset_index(drop=True)
+        if len(series) < 50:
+            continue
+
+        if _is_index_like(series, col):
+            continue
+
+        name = str(col).lower()
+        name_bonus = 2.0 if any(hint in name for hint in ECG_COLUMN_HINTS) else 0.0
+        variance = float(series.var()) if series.var() > 0 else 0.0
+        scored.append((name_bonus + variance, col, series))
+
+    if not scored:
+        raise ValueError(
+            'לא נמצאה עמודת ECG תקינה. הקובץ צריך לכלול לפחות עמודה אחת עם ערכים מספריים של אות ECG.'
+        )
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    _, column_name, signal = scored[0]
+    return signal, str(column_name)
+
+
+def resample_signal_to_fs(signal, source_fs, target_fs=FS):
+    """Resample a full ECG trace to the model sampling rate (360 Hz)."""
+    source_fs = float(source_fs)
+    if abs(source_fs - target_fs) < 1e-6:
+        return signal.reset_index(drop=True)
+
+    new_length = max(50, int(round(len(signal) * target_fs / source_fs)))
+    resampled = resample(signal.values, new_length)
+    return pd.Series(resampled, name='beat')
+
+
+def load_signal_from_csv(file_obj, sampling_rate=FS):
+    """Load ECG signal from CSV files in many common layouts."""
+    max_samples = WINDOW_SIZE * MAX_WINDOWS + WINDOW_SIZE
+    if sampling_rate != FS:
+        max_samples = int(max_samples * sampling_rate / FS) + WINDOW_SIZE
+
+    df = _read_csv_flexible(file_obj, nrows=max_samples)
+    signal, column_name = _pick_ecg_column(df)
+    return signal, column_name
 
 
 def preprocess_signal(signal):
@@ -152,10 +263,11 @@ def plot_ecg(signal, probabilities, window_size=WINDOW_SIZE):
     return base64.b64encode(buffer.read()).decode('utf-8')
 
 
-def run_inference(file_obj, model_path):
+def run_inference(file_obj, model_path, sampling_rate=FS):
     if hasattr(file_obj, 'seek'):
         file_obj.seek(0)
-    raw_signal = load_signal_from_csv(file_obj)
+    raw_signal, ecg_column = load_signal_from_csv(file_obj, sampling_rate=sampling_rate)
+    raw_signal = resample_signal_to_fs(raw_signal, sampling_rate, FS)
     processed = preprocess_signal(raw_signal)
     windows = segment_to_windows(processed)
     inputs, num_windows = prepare_model_inputs(windows)
@@ -166,5 +278,8 @@ def run_inference(file_obj, model_path):
 
     duration_sec = round(len(raw_signal) / FS, 2)
     summary['duration_seconds'] = duration_sec
+    summary['analyzed_seconds'] = duration_sec
+    summary['ecg_column'] = ecg_column
+    summary['sampling_rate'] = float(sampling_rate)
     summary['plot_base64'] = plot_b64
     return summary
