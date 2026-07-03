@@ -429,6 +429,107 @@
       text-align: center;
     }
 
+    /* ── Physician approval ── */
+    .physician-card {
+      border: 2px solid #d5e8d4;
+      background: linear-gradient(180deg, #f8fff9 0%, #ffffff 100%);
+    }
+
+    .physician-note {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      line-height: 1.7;
+    }
+
+    .physician-form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .physician-field label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .physician-field input {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      background: #fff;
+    }
+
+    .btn-approve {
+      width: 100%;
+      padding: 0.9rem 1.25rem;
+      background: linear-gradient(135deg, #27ae60, #1e8449);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 14px rgba(30, 132, 73, 0.25);
+    }
+
+    .btn-approve:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(30, 132, 73, 0.32);
+    }
+
+    .btn-approve:disabled {
+      background: #b2bec3;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .approval-status {
+      display: none;
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      background: var(--ok-bg);
+      border: 1px solid #a9dfbf;
+      color: var(--ok);
+    }
+
+    .approval-status.active {
+      display: block;
+    }
+
+    .approval-status .title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+
+    .approval-status .meta {
+      font-size: 0.85rem;
+      color: #2d6a4f;
+      line-height: 1.6;
+    }
+
+    .btn-reset-approval {
+      margin-top: 0.85rem;
+      padding: 0.55rem 1rem;
+      background: white;
+      color: var(--muted);
+      border: 1px solid #d5dbdb;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .btn-reset-approval:hover {
+      border-color: #b2bec3;
+      color: var(--text);
+    }
+
     footer {
       text-align: center;
       color: #b2bec3;
@@ -523,6 +624,28 @@
         <img id="plot-img" alt="ECG plot">
         <p class="plot-caption">אזורים מודגשים באדום = חלונות שסווגו כלא תקין</p>
       </div>
+
+      <div class="card physician-card" id="physician-card">
+        <div class="card-title">אישור רופא</div>
+        <p class="physician-note">
+          תוצאת המערכת היא כלי סיוע בלבד ואינה מהווה אבחנה רפואית.
+          הרופא המטפל נדרש לעיין בתוצאה ולאשר אותה לאחר בדיקה קלינית.
+        </p>
+
+        <div class="physician-form" id="physician-form">
+          <div class="physician-field">
+            <label for="physician-name">שם הרופא המאשר</label>
+            <input type="text" id="physician-name" placeholder="לדוגמה: ד״ר כהן">
+          </div>
+          <button class="btn-approve" id="approve-btn" type="button">אשר תוצאה — חתימת רופא</button>
+        </div>
+
+        <div class="approval-status" id="approval-status">
+          <div class="title">✓ אושר על ידי רופא</div>
+          <div class="meta" id="approval-meta"></div>
+          <button class="btn-reset-approval" id="reset-approval-btn" type="button">בטל אישור</button>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -538,10 +661,60 @@
     const errorBox = document.getElementById('error-box');
     const results = document.getElementById('results');
     const serverStatus = document.getElementById('server-status');
+    const physicianForm = document.getElementById('physician-form');
+    const physicianNameInput = document.getElementById('physician-name');
+    const approveBtn = document.getElementById('approve-btn');
+    const approvalStatus = document.getElementById('approval-status');
+    const approvalMeta = document.getElementById('approval-meta');
+    const resetApprovalBtn = document.getElementById('reset-approval-btn');
     const API = window.location.origin;
 
     let selectedFile = null;
     let serverOnline = false;
+    let lastResultSummary = null;
+
+    function resetPhysicianApproval() {
+      physicianForm.style.display = 'flex';
+      approvalStatus.classList.remove('active');
+      approvalMeta.textContent = '';
+      approveBtn.disabled = false;
+    }
+
+    function formatApprovalTime(date) {
+      return date.toLocaleString('he-IL', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+
+    function showPhysicianApproval() {
+      const doctorName = physicianNameInput.value.trim() || 'רופא לא צוין';
+      const approvedAt = formatApprovalTime(new Date());
+      const resultText = lastResultSummary
+        ? `${lastResultSummary.label_he} (${lastResultSummary.confidence_percent}% ביטחון)`
+        : 'לא זמין';
+
+      approvalMeta.innerHTML =
+        `רופא מאשר: <strong>${doctorName}</strong><br>` +
+        `תאריך ושעה: ${approvedAt}<br>` +
+        `תוצאה שאושרה: ${resultText}`;
+
+      physicianForm.style.display = 'none';
+      approvalStatus.classList.add('active');
+    }
+
+    approveBtn.addEventListener('click', () => {
+      if (!lastResultSummary) {
+        showError('יש לבצע ניתוח לפני אישור רופא.');
+        return;
+      }
+      showPhysicianApproval();
+    });
+
+    resetApprovalBtn.addEventListener('click', resetPhysicianApproval);
 
     function setServerStatus(online, text) {
       serverOnline = online;
@@ -636,6 +809,7 @@
       analyzeBtn.disabled = true;
       loading.classList.add('active');
       results.classList.remove('active');
+      resetPhysicianApproval();
       hideError();
 
       const form = new FormData();
@@ -674,6 +848,12 @@
         document.getElementById('stat-duration').textContent = data.duration_seconds;
         document.getElementById('stat-column').textContent = data.ecg_column || '—';
         document.getElementById('plot-img').src = 'data:image/png;base64,' + data.plot_base64;
+
+        lastResultSummary = {
+          label_he: data.label_he,
+          confidence_percent: data.confidence_percent,
+        };
+        resetPhysicianApproval();
 
         results.classList.add('active');
         results.scrollIntoView({ behavior: 'smooth', block: 'start' });
